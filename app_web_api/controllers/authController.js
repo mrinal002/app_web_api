@@ -3,38 +3,66 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const asyncHandler = require('express-async-handler');
 const admin = require('../config/firebase');
+const axios = require('axios');
 
-// Add phone number validation helper
+// Add helper functions
 const validatePhoneNumber = (phoneNumber) => {
   const phoneRegex = /^\+[1-9]\d{10,14}$/;
   return phoneRegex.test(phoneNumber);
+};
+
+const calculateAge = (dob) => {
+  const birthDate = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+
+  // Adjust age if birthday hasn't occurred yet this year
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
 };
 
 // @desc    Register user
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, gender, password, dateOfBirth,name } = req.body;
   
+  // Validate required fields
+  if (!email || !gender || !password || !dateOfBirth || !name) {
+    res.status(400);
+    throw new Error('Please provide all required fields');
+  }
+
+  // Calculate age
+  const age = calculateAge(dateOfBirth);
+  
+
   // Check if user exists
   const userExists = await User.findOne({ email });
   if (userExists) {
     res.status(400);
-    throw new Error('User already exists');
+    throw new Error('Email already exists');
   }
 
-  // Create user
-  const user = await User.create({ email, password });
-
-  // Generate token
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-    expiresIn: '30d'
+  // Store registration data in memory (use Redis in production)
+  global.registrationMap = global.registrationMap || new Map();
+  global.registrationMap.set(email, {
+    email,
+    name,
+    gender,
+    password,
+    dateOfBirth,
+    age,
+    timestamp: Date.now()
   });
-
-  res.status(201).json({
-    _id: user._id,
-    email: user.email,
-    token
+  console.log('Registration data stored for email:', global.registrationMap.get(email));
+  res.status(200).json({
+    success: true,
+    message: 'Registration data stored. Please verify mobile number.',
+    email
   });
 });
 
@@ -42,12 +70,21 @@ const registerUser = asyncHandler(async (req, res) => {
 // @route   POST /api/auth/send-otp
 // @access  Public
 const sendOTP = asyncHandler(async (req, res) => {
-  const { phoneNumber } = req.body;
-
-  if (!phoneNumber) {
+  const { phoneNumber, email } = req.body;
+  
+  if (!phoneNumber || !email) {
     return res.status(400).json({ 
       success: false,
-      error: 'Phone number is required' 
+      error: 'Phone number and email are required' 
+    });
+  }
+
+  // Verify registration data exists
+  const registrationData = global.registrationMap.get(email);
+  if (!registrationData) {
+    return res.status(400).json({
+      success: false,
+      error: 'Please complete registration first'
     });
   }
 
@@ -59,8 +96,13 @@ const sendOTP = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Verify Firebase Admin is working
-    await admin.app().get();
+    // Verify Firebase Admin is initialized correctly
+    if (!admin.apps.length) {
+      throw new Error('Firebase Admin not initialized');
+    }
+
+    // Instead of get(), use auth() to verify Firebase connection
+    await admin.auth().listUsers(1);
 
     // Check if user already exists with this phone number
     const existingUser = await User.findOne({ mobileNumber: phoneNumber });
@@ -75,9 +117,9 @@ const sendOTP = asyncHandler(async (req, res) => {
       otp,
       timestamp: Date.now(),
       attempts: 0,
-      verified: false
+      verified: false,
+      email // Store email with OTP data
     };
-    
     global.otpMap.set(phoneNumber, otpData);
 
     // Generate a simple JWT token instead of Firebase custom token
@@ -158,16 +200,25 @@ const verifyOTP = asyncHandler(async (req, res) => {
 
     // Find or create user
     let user = await User.findOne({ mobileNumber: phoneNumber });
+    console.log('User found:', user);
     
     if (!user) {
+      const storedEmail = storedOTPData.email;
+      const registrationData = global.registrationMap.get(storedEmail);
+
+      if (!registrationData) {
+        throw new Error('Registration data not found');
+      }
+
+      // Create user with registration data
       user = await User.create({
+        ...registrationData,
         mobileNumber: phoneNumber,
-        password: Math.random().toString(36).slice(2),
-        isVerified: true
+        isMobileVerified: true
       });
-    } else {
-      user.isVerified = true;
-      await user.save();
+      
+      // Clear registration data
+      global.registrationMap.delete(storedEmail);
     }
 
     // Clear OTP data
@@ -202,28 +253,196 @@ const verifyOTP = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
   const { emailOrMobile, password } = req.body;
 
-  // Check for user by email or mobile
+  if (!emailOrMobile || !password) {
+    res.status(400);
+    throw new Error('Please provide all required fields');
+  }
+
+  // Check for user by email or mobile (case-insensitive)
   const user = await User.findOne({
     $or: [
-      { email: emailOrMobile },
+      { email: { $regex: new RegExp(`^${emailOrMobile}$`, 'i') } },
       { mobileNumber: emailOrMobile }
     ]
   });
-  
-  if (user && (await bcrypt.compare(password, user.password))) {
+
+  if (!user) {
+    res.status(401);
+    throw new Error('Invalid credentials');
+  }
+
+  // Verify password
+  if (await bcrypt.compare(password, user.password)) {
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: '30d'
     });
     
     res.json({
-      _id: user._id,
-      email: user.email,
-      mobileNumber: user.mobileNumber,
+      success: true,
+      user: {
+        _id: user._id,
+        email: user.email,
+        mobileNumber: user.mobileNumber,
+        name: user.name,
+        profilePicture: user.profilePicture,
+        lastLogin: user.lastLogin,
+        isVerified: user.isVerified
+      },
       token
     });
   } else {
+    // Increment failed attempts (you would need to add this field to your User model)
+    user.loginAttempts = (user.loginAttempts || 0) + 1;
+    await user.save();
+
     res.status(401);
     throw new Error('Invalid credentials');
+  }
+});
+
+// @desc    Login/Register with Facebook
+// @route   POST /api/auth/facebook
+// @access  Public
+const facebookLogin = asyncHandler(async (req, res) => {
+  const { accessToken } = req.body;
+
+  if (!accessToken) {
+    res.status(400);
+    throw new Error('Access token is required');
+  }
+
+  try {
+    // Get user data from Facebook
+    const response = await axios.get(
+      `https://graph.facebook.com/v12.0/me?fields=name,birthday,email,gender,id,link,albums{photos{images.height(1280).width(720)}}&access_token=${accessToken}`
+    );
+
+    const { 
+      id: facebookId, 
+      name, 
+      email,
+      birthday,
+      gender,
+      link,
+      albums
+    } = response.data;
+
+    console.log('Processing Facebook data for user:', name);
+
+    // Process albums data with strict dimension filtering
+    let allPhotos = [];
+    albums?.data?.forEach(album => {
+      const albumPhotos = album.photos?.data?.map(photo => {
+        // Find image with EXACT 1280x720 dimensions only
+        const targetImage = photo.images?.find(img => 
+          img.height === 1280 && img.width === 720
+        );
+
+        if (targetImage) {
+          return {
+            imageUrl: targetImage.source,
+            height: targetImage.height,
+            width: targetImage.width
+          };
+        }
+        return null;
+      }).filter(photo => photo !== null) || [];
+      
+      allPhotos = [...allPhotos, ...albumPhotos];
+    });
+
+    // Take only first 5 photos that match the dimensions
+    allPhotos = allPhotos.slice(0, 5);
+
+    console.log('Found', allPhotos.length, 'photos with exact 1280x720 dimensions');
+
+    const processedAlbums = [{
+      albumId: 'combined',
+      photos: allPhotos
+    }];
+
+    // Try to get profile picture from first matching photo
+    const profilePicture = allPhotos[0]?.imageUrl || null;
+
+    // Find user by Facebook ID or email
+    let user = await User.findOne({
+      $or: [
+        { facebookId },
+       
+      ]
+    });
+
+    const isNewUser = !user;
+    
+    if (!user) {
+      user = await User.create({
+        facebookId,
+        email: email || `${facebookId}@facebook.com`,
+        name,
+        dateOfBirth: birthday ? new Date(birthday) : undefined,
+        age: birthday ? calculateAge(birthday) : undefined,
+        gender: gender || 'prefer_not_to_say',
+        password: await bcrypt.hash(Math.random().toString(36).slice(-8), 10),
+        profilePicture,
+        facebookLink: link,
+        facebookAlbums: processedAlbums,
+        isFacebookVerified: true
+      });
+    } else {
+      console.log('Updating user data');
+      user.facebookId = facebookId;
+      user.name = name || user.name;
+      if (birthday) {
+        user.dateOfBirth = new Date(birthday);
+        user.age = calculateAge(birthday);
+      }
+      if (gender) user.gender = gender;
+      if (profilePicture) user.profilePicture = profilePicture;
+      if (link) user.facebookLink = link;
+      user.facebookAlbums = processedAlbums;
+      user.isFacebookVerified = true;
+      if (email) user.email = email;
+      await user.save();
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: user._id }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      isNewUser,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        dateOfBirth: user.dateOfBirth,
+        age: user.age,
+        gender: user.gender,
+        profilePicture: user.profilePicture,
+        facebookLink: user.facebookLink,
+        albumsCount: user.facebookAlbums?.length || 0,
+        totalPhotos: user.facebookAlbums?.reduce((sum, album) => sum + album.photos.length, 0) || 0,
+        isFacebookVerified: user.isFacebookVerified
+      },
+      token
+    });
+
+  } catch (error) {
+    console.error('Facebook authentication error:', error);
+    console.error('Error details:', error.response?.data || 'No additional error details');
+    res.status(401).json({
+      success: false,
+      error: error.response?.data?.error?.message || 'Facebook authentication failed',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -236,11 +455,111 @@ const getProfile = asyncHandler(async (req, res) => {
   if (user) {
     res.json({
       _id: user._id,
-      email: user.email
+      email: user.email,
+      name: user.name,
+      profilePicture: user.profilePicture,
+      accountType: user.accountType,
+      isVerified: user.isVerified
     });
   } else {
     res.status(404);
     throw new Error('User not found');
+  }
+});
+
+// @desc    Update user profile with Facebook data
+// @route   POST /api/auth/profile/facebook
+// @access  Private
+const profilefacebookLogin = asyncHandler(async (req, res) => {
+  const { accessToken } = req.body;
+
+  if (!accessToken) {
+    res.status(400);
+    throw new Error('Access token is required');
+  }
+
+  try {
+    // Get user data from Facebook
+    const response = await axios.get(
+      `https://graph.facebook.com/v12.0/me?fields=name,birthday,email,gender,id,link,albums{photos{images.height(1280).width(720)}}&access_token=${accessToken}`
+    );
+
+    const { 
+      id: facebookId, 
+      link,
+      albums
+    } = response.data;
+
+    // Process albums data
+    let allPhotos = [];
+    albums?.data?.forEach(album => {
+      const albumPhotos = album.photos?.data?.map(photo => {
+        const targetImage = photo.images?.find(img => 
+          img.height === 1280 && img.width === 720
+        );
+
+        if (targetImage) {
+          return {
+            imageUrl: targetImage.source,
+            height: targetImage.height,
+            width: targetImage.width
+          };
+        }
+        return null;
+      }).filter(photo => photo !== null) || [];
+      
+      allPhotos = [...allPhotos, ...albumPhotos];
+    });
+
+    // Take only first 5 photos
+    allPhotos = allPhotos.slice(0, 5);
+
+    const processedAlbums = [{
+      albumId: 'combined',
+      photos: allPhotos
+    }];
+
+    // Get profile picture from first matching photo
+    const profilePicture = allPhotos[0]?.imageUrl || null;
+
+    // Find and update existing user
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        facebookId,
+        facebookLink: link,
+        facebookAlbums: processedAlbums,
+        profilePicture: profilePicture || user.profilePicture,
+        isFacebookVerified: true
+      },
+      { new: true }
+    );
+
+    if (!user) {
+      res.status(404);
+      throw new Error('User not found');
+    }
+
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        facebookId: user.facebookId,
+        facebookLink: user.facebookLink,
+        profilePicture: user.profilePicture,
+        albumsCount: user.facebookAlbums?.length || 0,
+        totalPhotos: user.facebookAlbums?.reduce((sum, album) => sum + album.photos.length, 0) || 0,
+        isFacebookVerified: user.isFacebookVerified
+      }
+    });
+
+  } catch (error) {
+    console.error('Facebook data update error:', error);
+    res.status(400).json({
+      success: false,
+      error: 'Failed to update Facebook data',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -251,19 +570,47 @@ const updateProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user.id);
 
   if (user) {
-    user.email = req.body.email || user.email;
-    if (req.body.password) {
-      user.password = req.body.password;
+    const updateFields = [
+      'name', 'aboutMe', 'city', 'relationshipStatus',
+      'lookingFor', 'interests', 'education', 'profession',
+      'drinking', 'smoking', 'diet', 'zodiacSign', 'languages'
+    ];
+
+    updateFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        user[field] = req.body[field];
+      }
+    });
+
+    // Special handling for arrays
+    if (req.body.interests) {
+      user.interests = Array.isArray(req.body.interests) ? req.body.interests : [req.body.interests];
+    }
+    if (req.body.languages) {
+      user.languages = Array.isArray(req.body.languages) ? req.body.languages : [req.body.languages];
     }
 
     const updatedUser = await user.save();
 
     res.json({
-      _id: updatedUser._id,
-      email: updatedUser.email,
-      token: jwt.sign({ id: updatedUser._id }, process.env.JWT_SECRET, {
-        expiresIn: '30d'
-      })
+      success: true,
+      user: {
+        _id: updatedUser._id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        aboutMe: updatedUser.aboutMe,
+        city: updatedUser.city,
+        relationshipStatus: updatedUser.relationshipStatus,
+        lookingFor: updatedUser.lookingFor,
+        interests: updatedUser.interests,
+        education: updatedUser.education,
+        profession: updatedUser.profession,
+        drinking: updatedUser.drinking,
+        smoking: updatedUser.smoking,
+        diet: updatedUser.diet,
+        zodiacSign: updatedUser.zodiacSign,
+        languages: updatedUser.languages
+      }
     });
   } else {
     res.status(404);
@@ -277,5 +624,7 @@ module.exports = {
   getProfile,
   updateProfile,
   sendOTP,
-  verifyOTP
+  verifyOTP,
+  facebookLogin,
+  profilefacebookLogin,
 };
