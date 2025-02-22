@@ -131,7 +131,9 @@ const sendOTP = asyncHandler(async (req, res) => {
       process.env.JWT_SECRET, 
       { expiresIn: '10m' }
     );
-
+    console.log('OTP generated:', otp);
+    console.log('Temporary token:', tempToken);
+    
     // In production, you would send the OTP via SMS here
     // For development, we'll return it in the response
     res.json({

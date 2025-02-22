@@ -144,7 +144,15 @@ const userSchema = new mongoose.Schema({
   languages: [{
     type: String,
     trim: true
-  }]
+  }],
+  isOnline: {
+    type: Boolean,
+    default: false
+  },
+  lastActive: {
+    type: Date,
+    default: Date.now
+  }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

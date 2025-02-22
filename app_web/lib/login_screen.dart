@@ -8,12 +8,12 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController emailController = TextEditingController();
+  final TextEditingController emailOrMobileController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final ApiService apiService = ApiService();
 
   void login() async {
-    var response = await apiService.login(emailController.text, passwordController.text);
+    var response = await apiService.login(emailOrMobileController.text, passwordController.text);
     if (response.success && response.data != null) {
       TokenService.setToken(response.data!['token']);
       Navigator.pushReplacementNamed(context, '/profile');
@@ -34,7 +34,10 @@ class _LoginScreenState extends State<LoginScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            TextField(controller: emailController, decoration: InputDecoration(labelText: "Email")),
+            TextField(
+              controller: emailOrMobileController, 
+              decoration: InputDecoration(labelText: "Email or Mobile")
+            ),
             TextField(controller: passwordController, decoration: InputDecoration(labelText: "Password"), obscureText: true),
             SizedBox(height: 20),
             ElevatedButton(onPressed: login, child: Text("Login")),

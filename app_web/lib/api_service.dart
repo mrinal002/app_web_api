@@ -22,12 +22,12 @@ class ApiService {
     };
   }
 
-  Future<ApiResponse> login(String email, String password) async {
+  Future<ApiResponse> login(String emailOrMobile, String password) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/login'),
         headers: _headers,
-        body: jsonEncode({"email": email, "password": password}),
+        body: jsonEncode({"emailOrMobile": emailOrMobile, "password": password}),
       );
 
       if (response.statusCode == 200) {
@@ -46,12 +46,12 @@ class ApiService {
     }
   }
 
-  Future<ApiResponse> register(String email, String password) async {
+  Future<ApiResponse> register(String email, String name, String dateOfBirth, String gender,  String password) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/register'),
         headers: _headers,
-        body: jsonEncode({"email": email, "password": password}),
+        body: jsonEncode({"email": email, "name": name, "dateOfBirth": dateOfBirth, "gender": gender, "password": password}),
       );
 
       if (response.statusCode == 200) {
@@ -85,6 +85,61 @@ class ApiService {
           success: false,
           message: "Failed to fetch profile",
         );
+      }
+    } catch (e) {
+      return ApiResponse(success: false, message: "Connection error: ${e.toString()}");
+    }
+  }
+
+  Future<ApiResponse> sendOtp(String email, String phoneNumber) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/send-otp'),
+        headers: _headers,
+        body: jsonEncode({
+          "email": email,
+          "phoneNumber": phoneNumber
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        return ApiResponse(success: true, message: "OTP sent successfully", data: body);
+      } else {
+        var message = "Failed to send OTP";
+        try {
+          final body = jsonDecode(response.body);
+          message = body['message'] ?? message;
+        } catch (_) {}
+        return ApiResponse(success: false, message: message);
+      }
+    } catch (e) {
+      return ApiResponse(success: false, message: "Connection error: ${e.toString()}");
+    }
+  }
+
+  Future<ApiResponse> verifyOtp(String phoneNumber, String tempToken, String otp) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/verify-otp'),
+        headers: _headers,
+        body: jsonEncode({
+          "phoneNumber": phoneNumber,
+          "tempToken": tempToken,
+          "otp": otp
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        return ApiResponse(success: true, message: "OTP verified successfully", data: body);
+      } else {
+        var message = "Failed to verify OTP";
+        try {
+          final body = jsonDecode(response.body);
+          message = body['message'] ?? message;
+        } catch (_) {}
+        return ApiResponse(success: false, message: message);
       }
     } catch (e) {
       return ApiResponse(success: false, message: "Connection error: ${e.toString()}");
