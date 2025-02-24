@@ -9,11 +9,13 @@ const {
   sendOTP,
   verifyOTP,
   facebookLogin,
-  profilefacebookLogin
+  profilefacebookLogin,
+  logout
 } = require('../controllers/authController');
 
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/logout', protect, logout);
 router.post('/send-otp', sendOTP);
 router.post('/verify-otp', verifyOTP);
 router.post('/facebook', facebookLogin);

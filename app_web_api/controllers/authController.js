@@ -255,34 +255,46 @@ const verifyOTP = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
   const { emailOrMobile, password } = req.body;
 
+  console.log('Login attempt for:', emailOrMobile);
+
   if (!emailOrMobile || !password) {
     res.status(400);
-    throw new Error('Please provide all required fields');
+    throw new Error('Please provide both email/mobile and password');
   }
 
   // Check for user by email or mobile (case-insensitive)
   const user = await User.findOne({
     $or: [
-      { email: { $regex: new RegExp(`^${emailOrMobile}$`, 'i') } },
+      { email: emailOrMobile.toLowerCase() },
       { mobileNumber: emailOrMobile }
     ]
   });
 
+  console.log('User found:', user ? 'Yes' : 'No');
+
   if (!user) {
     res.status(401);
-    throw new Error('Invalid credentials');
+    throw new Error('Invalid email/mobile or password');
   }
 
   // Verify password
-  if (await bcrypt.compare(password, user.password)) {
-    // Update last login
+  const isMatch = await bcrypt.compare(password, user.password);
+  console.log('Password match:', isMatch ? 'Yes' : 'No');
+
+  if (isMatch) {
+    // Update online status and last activity
+    user.isOnline = true;
+    user.lastActive = new Date();
     user.lastLogin = new Date();
     await user.save();
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '30d'
-    });
-    
+    // Generate new token
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
     res.json({
       success: true,
       user: {
@@ -291,19 +303,35 @@ const loginUser = asyncHandler(async (req, res) => {
         mobileNumber: user.mobileNumber,
         name: user.name,
         profilePicture: user.profilePicture,
+        isOnline: user.isOnline,
+        lastActive: user.lastActive,
         lastLogin: user.lastLogin,
-        isVerified: user.isVerified
+        isVerified: user.isMobileVerified || user.isFacebookVerified
       },
       token
     });
   } else {
-    // Increment failed attempts (you would need to add this field to your User model)
-    user.loginAttempts = (user.loginAttempts || 0) + 1;
-    await user.save();
-
     res.status(401);
-    throw new Error('Invalid credentials');
+    throw new Error('Invalid email/mobile or password');
   }
+});
+
+// @desc    Logout user
+// @route   POST /api/auth/logout
+// @access  Private
+const logout = asyncHandler(async (req, res) => {
+  // Update last logout timestamp and online status
+  await User.findByIdAndUpdate(req.user.id, {
+    lastLogout: new Date(),
+    isOnline: false,
+    lastActive: new Date(),
+    socketId: null
+  });
+
+  res.json({
+    success: true,
+    message: 'Logged out successfully'
+  });
 });
 
 // @desc    Login/Register with Facebook
@@ -459,9 +487,35 @@ const getProfile = asyncHandler(async (req, res) => {
       _id: user._id,
       email: user.email,
       name: user.name,
+      gender: user.gender,
+      dateOfBirth: user.dateOfBirth,
+      age: user.age,
+      mobileNumber: user.mobileNumber,
+      facebookId: user.facebookId,
+      facebookLink: user.facebookLink,
+      facebookAlbums: user.facebookAlbums,
       profilePicture: user.profilePicture,
-      accountType: user.accountType,
-      isVerified: user.isVerified
+      VerifiedPhoto: user.VerifiedPhoto,
+      isMobileVerified: user.isMobileVerified,
+      isFacebookVerified: user.isFacebookVerified,
+      isPhotoVerified: user.isPhotoVerified,
+      aboutMe: user.aboutMe,
+      city: user.city,
+      relationshipStatus: user.relationshipStatus,
+      lookingFor: user.lookingFor,
+      interests: user.interests,
+      education: user.education,
+      profession: user.profession,
+      drinking: user.drinking,
+      smoking: user.smoking,
+      diet: user.diet,
+      zodiacSign: user.zodiacSign,
+      languages: user.languages,
+      isOnline: user.isOnline,
+      lastActive: user.lastActive,
+      socketId: user.socketId,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
     });
   } else {
     res.status(404);
@@ -623,6 +677,7 @@ const updateProfile = asyncHandler(async (req, res) => {
 module.exports = {
   registerUser,
   loginUser,
+  logout,
   getProfile,
   updateProfile,
   sendOTP,

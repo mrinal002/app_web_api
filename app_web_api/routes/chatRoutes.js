@@ -5,12 +5,14 @@ const {
   getChatHistory,
   getRecentChats,
   markMessagesAsRead,
-  sendMessage
+  sendMessage,
+  checkConversation
 } = require('../controllers/chatController');
 
-router.get('/history/:userId', protect, getChatHistory);
+router.get('/history/:conversationId', protect, getChatHistory);
 router.get('/recent', protect, getRecentChats);
 router.put('/read/:senderId', protect, markMessagesAsRead);
 router.post('/send', protect, sendMessage);
+router.get('/check-conversation/:userId', protect, checkConversation);
 
 module.exports = router;

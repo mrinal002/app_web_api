@@ -38,13 +38,13 @@ class _LoginScreenState extends State<LoginScreen> {
               controller: emailOrMobileController, 
               decoration: InputDecoration(labelText: "Email or Mobile")
             ),
-            TextField(controller: passwordController, decoration: InputDecoration(labelText: "Password"), obscureText: true),
+            TextField(
+              controller: passwordController, 
+              decoration: InputDecoration(labelText: "Password"), 
+              obscureText: true
+            ),
             SizedBox(height: 20),
             ElevatedButton(onPressed: login, child: Text("Login")),
-            TextButton(
-              onPressed: () => Navigator.pushNamed(context, '/register'),
-              child: Text("Create an account"),
-            ),
           ],
         ),
       ),

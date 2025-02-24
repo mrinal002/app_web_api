@@ -27,7 +27,8 @@ const socketConfig = (io) => {
     connectedUsers.set(socket.userId, socket.id);
     await User.findByIdAndUpdate(socket.userId, { 
       isOnline: true, 
-      lastActive: new Date() 
+      lastActive: new Date(),
+      socketId: socket.id
     });
     
     // Broadcast updated online users list
@@ -35,6 +36,12 @@ const socketConfig = (io) => {
       isOnline: true 
     }).select('_id name profilePicture');
     io.emit('users_online', onlineUsers);
+
+    // Broadcast user's online status
+    socket.broadcast.emit('userStatus', {
+      userId: socket.userId,
+      isOnline: true
+    });
 
     // Handle private messages
     socket.on('private_message', async (data) => {
@@ -95,7 +102,8 @@ const socketConfig = (io) => {
       // Update user status
       await User.findByIdAndUpdate(socket.userId, { 
         isOnline: false, 
-        lastActive: new Date() 
+        lastActive: new Date(),
+        socketId: null
       });
 
       // Broadcast updated online users list
@@ -103,6 +111,12 @@ const socketConfig = (io) => {
         isOnline: true 
       }).select('_id name profilePicture');
       io.emit('users_online', onlineUsers);
+
+      // Broadcast user's offline status
+      socket.broadcast.emit('userStatus', {
+        userId: socket.userId,
+        isOnline: false
+      });
     });
   });
 };

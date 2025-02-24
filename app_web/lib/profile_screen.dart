@@ -28,7 +28,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  void _logout() {
+  void _logout() async {
+    final response = await apiService.logout();
     TokenService.clearToken();
     Navigator.pushReplacementNamed(context, '/');
   }
@@ -44,6 +45,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: _logout,
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.pushNamed(context, '/online-users');
+        },
+        icon: const Icon(Icons.people),
+        label: const Text('Online Users'),
       ),
       body: isLoading
           ? Center(child: CircularProgressIndicator())

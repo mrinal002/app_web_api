@@ -13,6 +13,8 @@ class ApiResponse {
 class ApiService {
   static const String baseUrl = "http://localhost:4000/api/auth";
 
+  String? _userId;
+
   Map<String, String> get _headers {
     final token = TokenService.getToken();
     return {
@@ -138,6 +140,174 @@ class ApiService {
         try {
           final body = jsonDecode(response.body);
           message = body['message'] ?? message;
+        } catch (_) {}
+        return ApiResponse(success: false, message: message);
+      }
+    } catch (e) {
+      return ApiResponse(success: false, message: "Connection error: ${e.toString()}");
+    }
+  }
+
+  Future<ApiResponse> logout() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/logout'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        return ApiResponse(success: true, message: "Logged out successfully");
+      } else {
+        return ApiResponse(success: false, message: "Failed to logout");
+      }
+    } catch (e) {
+      return ApiResponse(success: false, message: "Connection error: ${e.toString()}");
+    }
+  }
+
+  Future<ApiResponse> getOnlineUsers() async {
+    return _get('/users/online');
+  }
+
+  Future<ApiResponse> sendMessage(String receiverId, String message) async {
+    print('Sending message to $receiverId: $message');
+    
+    if (message.trim().isEmpty) {
+      return ApiResponse(success: false, message: "Message cannot be empty");
+    }
+    
+    try {
+      final response = await http.post(
+        Uri.parse('${baseUrl.replaceAll('/auth', '')}/chat/send'),
+        headers: _headers,
+        body: jsonEncode({
+          'receiverId': receiverId,
+          'message': message.trim(),
+        }),
+      );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
+      if (response.statusCode == 201) { // Changed from 200 to 201
+        final responseBody = jsonDecode(response.body);
+        if (responseBody['success'] && responseBody['message'] != null) {
+          return ApiResponse(
+            success: true, 
+            message: "Message sent",
+            data: {'message': responseBody['message']},
+          );
+        }
+      }
+      
+      var errorMessage = "Failed to send message";
+      try {
+        final responseBody = jsonDecode(response.body);
+        errorMessage = responseBody['error'] ?? responseBody['message'] ?? errorMessage;
+      } catch (_) {}
+      return ApiResponse(success: false, message: errorMessage);
+    } catch (e) {
+      print('Error sending message: $e');
+      return ApiResponse(success: false, message: "Connection error: ${e.toString()}");
+    }
+  }
+
+  Future<ApiResponse> markMessagesAsRead(String senderId) async {
+    return _put('/chat/read/$senderId', {});
+  }
+
+  Future<ApiResponse> getChatHistory(String conversationId) async {
+    if (conversationId.isEmpty) {
+      return ApiResponse(success: false, message: "Invalid conversation ID");
+    }
+    return _get('/chat/history/$conversationId');
+  }
+
+  Future<ApiResponse> getRecentChats() async {
+    return _get('/chat/recent');
+  }
+
+  Future<ApiResponse> checkExistingConversation(String userId) async {
+    if (userId.isEmpty) {
+      return ApiResponse(success: false, message: "Invalid user ID");
+    }
+    return _get('/chat/check-conversation/$userId');
+  }
+
+  Future<String?> getCurrentUserId() async {
+    if (_userId != null) return _userId;
+    
+    final response = await getProfile();
+    if (response.success && response.data != null) {
+      _userId = response.data!['_id'];
+      return _userId;
+    }
+    return null;
+  }
+
+  Future<ApiResponse> _get(String endpoint) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${baseUrl.replaceAll('/auth', '')}$endpoint'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        return ApiResponse(success: true, message: "Request successful", data: body);
+      } else {
+        var message = "Request failed";
+        try {
+          final body = jsonDecode(response.body);
+          message = body['message'] ?? message;
+        } catch (_) {}
+        return ApiResponse(success: false, message: message);
+      }
+    } catch (e) {
+      return ApiResponse(success: false, message: "Connection error: ${e.toString()}");
+    }
+  }
+
+  Future<ApiResponse> _post(String endpoint, Map<String, dynamic> body) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${baseUrl.replaceAll('/auth', '')}$endpoint'),
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        final responseBody = jsonDecode(response.body);
+        return ApiResponse(success: true, message: "Request successful", data: responseBody);
+      } else {
+        var message = "Request failed";
+        try {
+          final responseBody = jsonDecode(response.body);
+          message = responseBody['message'] ?? message;
+        } catch (_) {}
+        return ApiResponse(success: false, message: message);
+      }
+    } catch (e) {
+      return ApiResponse(success: false, message: "Connection error: ${e.toString()}");
+    }
+  }
+
+  Future<ApiResponse> _put(String endpoint, Map<String, dynamic> body) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${baseUrl.replaceAll('/auth', '')}$endpoint'),
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        final responseBody = jsonDecode(response.body);
+        return ApiResponse(success: true, message: "Request successful", data: responseBody);
+      } else {
+        var message = "Request failed";
+        try {
+          final responseBody = jsonDecode(response.body);
+          message = responseBody['message'] ?? message;
         } catch (_) {}
         return ApiResponse(success: false, message: message);
       }

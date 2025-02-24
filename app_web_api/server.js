@@ -36,6 +36,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
+// Add activity tracking middleware after auth middleware
+const trackActivity = require('./middleware/activity');
+app.use(morgan('dev'));
+app.use('/api', trackActivity);
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);  // Add chat routes
