@@ -27,9 +27,6 @@ const userSchema = new mongoose.Schema({
     trim: true,
     required: true,
   },
-  age: {
-    type: Number,
-  },
   mobileNumber: {
     type: String,
     unique: true,
@@ -87,27 +84,10 @@ const userSchema = new mongoose.Schema({
   },
   relationshipStatus: {
     type: String,
-    enum: ['single', 'married', 'divorced', 'divorced with kids', 'widowed', 'widowed with kids', 'separated', 'separated with kids', 'single parent', 'prefer_not_to_say'],
     default: 'prefer_not_to_say'
   },
   lookingFor: {
     type: String,
-    enum: [
-      'Non-committal relationship', 
-      'Casual relationship, but exclusive',
-      'Casual now, long-term relation later',
-      'New friends', 
-      'Friendship, open to dating', 
-      'Dating', 
-      'Dating, eading to marriage',
-      'Marriage, open to dating',
-      'Long-term relationship',
-      'Long-term, fine with short',
-      'Fine with both long-term and short-term',
-      'Open relationship',
-      'Online companion',
-      'prefer_not_to_say'
-    ],
     default: 'prefer_not_to_say'
   },
   interests: [{
@@ -124,22 +104,18 @@ const userSchema = new mongoose.Schema({
   },
   drinking: {
     type: String,
-    enum: ['never', 'rarely', 'socially', 'frequently', 'prefer_not_to_say'],
     default: 'prefer_not_to_say'
   },
   smoking: {
     type: String,
-    enum: ['never', 'occasionally', 'regularly', 'trying_to_quit', 'prefer_not_to_say'],
     default: 'prefer_not_to_say'
   },
   diet: {
     type: String,
-    enum: ['vegetarian', 'vegan', 'non_vegetarian', 'prefer_not_to_say'],
     default: 'prefer_not_to_say'
   },
   zodiacSign: {
     type: String,
-    enum: ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces']
   },
   languages: [{
     type: String,

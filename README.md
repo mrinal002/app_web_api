@@ -1154,13 +1154,15 @@ Remember to:
 Made changes.
 
 
-if conversationId found show chat history
-if not found conversationId create new conversationId
-conversationId like this
-multiple user ( 1 2 3  )
-1 send message 2 conversationId =a
-1 send message 3 conversationId =b
-2 send message 1 conversationId =a
-2 send message 3 conversationId =c
-3 send message 1 conversationId =b
-3 send message 2 conversationId =c
+    flutter routes
+    '/'
+    '/login'
+    '/register'
+    '/profile'
+    '/mobile'
+    '/online-users'
+    '/chat'
+
+    user login block  '/login',  '/register', '/mobile' routes  unblock   '/profile', '/online-users',   '/chat', routes
+
+    user logout block '/profile', '/online-users', 

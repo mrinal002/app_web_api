@@ -11,18 +11,7 @@ const validatePhoneNumber = (phoneNumber) => {
   return phoneRegex.test(phoneNumber);
 };
 
-const calculateAge = (dob) => {
-  const birthDate = new Date(dob);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
 
-  // Adjust age if birthday hasn't occurred yet this year
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-};
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -36,8 +25,7 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new Error('Please provide all required fields');
   }
 
-  // Calculate age
-  const age = calculateAge(dateOfBirth);
+
   
 
   // Check if user exists
@@ -55,7 +43,6 @@ const registerUser = asyncHandler(async (req, res) => {
     gender,
     password,
     dateOfBirth,
-    age,
     timestamp: Date.now()
   });
   console.log('Registration data stored for email:', global.registrationMap.get(email));
@@ -106,6 +93,13 @@ const sendOTP = asyncHandler(async (req, res) => {
 
     // Check if user already exists with this phone number
     const existingUser = await User.findOne({ mobileNumber: phoneNumber });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone number is already registered. Please log in instead.'
+      });
+    }
     
     // Generate a random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -414,7 +408,7 @@ const facebookLogin = asyncHandler(async (req, res) => {
         email: email || `${facebookId}@facebook.com`,
         name,
         dateOfBirth: birthday ? new Date(birthday) : undefined,
-        age: birthday ? calculateAge(birthday) : undefined,
+        
         gender: gender || 'prefer_not_to_say',
         password: await bcrypt.hash(Math.random().toString(36).slice(-8), 10),
         profilePicture,
@@ -428,7 +422,7 @@ const facebookLogin = asyncHandler(async (req, res) => {
       user.name = name || user.name;
       if (birthday) {
         user.dateOfBirth = new Date(birthday);
-        user.age = calculateAge(birthday);
+        
       }
       if (gender) user.gender = gender;
       if (profilePicture) user.profilePicture = profilePicture;
@@ -454,7 +448,7 @@ const facebookLogin = asyncHandler(async (req, res) => {
         name: user.name,
         email: user.email,
         dateOfBirth: user.dateOfBirth,
-        age: user.age,
+        
         gender: user.gender,
         profilePicture: user.profilePicture,
         facebookLink: user.facebookLink,
@@ -489,7 +483,7 @@ const getProfile = asyncHandler(async (req, res) => {
       name: user.name,
       gender: user.gender,
       dateOfBirth: user.dateOfBirth,
-      age: user.age,
+      
       mobileNumber: user.mobileNumber,
       facebookId: user.facebookId,
       facebookLink: user.facebookLink,

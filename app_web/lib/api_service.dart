@@ -34,6 +34,9 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
+        if (body['token'] != null) {
+          TokenService.setToken(body['token']);
+        }
         return ApiResponse(success: true, message: "Login successful", data: body);
       } else {
         var message = "Invalid email or password";
@@ -108,7 +111,7 @@ class ApiService {
         final body = jsonDecode(response.body);
         return ApiResponse(success: true, message: "OTP sent successfully", data: body);
       } else {
-        var message = "Failed to send OTP";
+        var message = "Phone number already exists, please try a new phone number "; 
         try {
           final body = jsonDecode(response.body);
           message = body['message'] ?? message;
@@ -154,6 +157,9 @@ class ApiService {
         Uri.parse('$baseUrl/logout'),
         headers: _headers,
       );
+
+      // Clear token regardless of response
+      TokenService.removeToken();
 
       if (response.statusCode == 200) {
         return ApiResponse(success: true, message: "Logged out successfully");

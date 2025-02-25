@@ -150,10 +150,37 @@ const checkConversation = asyncHandler(async (req, res) => {
   });
 });
 
+const getUserConversationIds = asyncHandler(async (req, res) => {
+  const currentUserId = req.user.id;
+
+  const conversations = await Conversation.find({
+    participants: currentUserId
+  })
+    .select('_id lastMessage lastMessageTime participants')
+    .populate('participants', 'name _id')
+    .sort({ lastMessageTime: -1 });
+
+  const conversationDetails = conversations.map(conv => ({
+    conversationId: conv._id,
+    lastMessage: conv.lastMessage,
+    lastMessageTime: conv.lastMessageTime,
+    participants: conv.participants.map(p => ({
+      id: p._id,
+      name: p.name
+    }))
+  }));
+
+  res.json({
+    success: true,
+    conversations: conversationDetails
+  });
+});
+
 module.exports = {
   getChatHistory,
   getRecentChats,
   markMessagesAsRead,
   sendMessage,
-  checkConversation
+  checkConversation,
+  getUserConversationIds
 };

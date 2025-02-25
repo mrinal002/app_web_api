@@ -30,7 +30,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _logout() async {
     final response = await apiService.logout();
-    TokenService.clearToken();
+    TokenService.removeToken();  // Fixed: changed clearToken to removeToken
     Navigator.pushReplacementNamed(context, '/');
   }
 
