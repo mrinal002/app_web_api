@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+import 'utils/url_strategy.dart';
 import 'token_service.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
@@ -11,8 +11,8 @@ import 'pages/chat_page.dart';
 import 'route_middleware.dart';
 
 void main() {
-  // Configure URL strategy
-  setUrlStrategy(PathUrlStrategy());
+  // Configure URL strategy for web (no-op on mobile)
+  configureUrlStrategy();
   runApp(MyApp());
 }
 

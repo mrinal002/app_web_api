@@ -11,7 +11,7 @@ class ApiResponse {
 }
 
 class ApiService {
-  static const String baseUrl = "http://localhost:4000/api/auth";
+  static const String baseUrl = "http://192.168.0.4:4000/api/auth";
 
   String? _userId;
 

@@ -1,19 +1,20 @@
-import 'dart:html' show window;
 import 'dart:convert';
+import 'storage/token_storage.dart';
 
 class TokenService {
   static const String _tokenKey = 'auth_token';
+  static final TokenStorage _storage = TokenStorage();
   
   static void setToken(String token) {
-    window.localStorage[_tokenKey] = token;
+    _storage.setItem(_tokenKey, token);
   }
 
   static String? getToken() {
-    return window.localStorage[_tokenKey];
+    return _storage.getItem(_tokenKey);
   }
 
   static void removeToken() {
-    window.localStorage.remove(_tokenKey);
+    _storage.removeItem(_tokenKey);
   }
 
   static bool hasValidToken() {
